@@ -1,0 +1,4 @@
+bin
+build
+*.pdf
+.ninja_*

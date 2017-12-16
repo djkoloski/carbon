@@ -1,0 +1,25 @@
+rule compile
+  command = cl /c $in /Fo$out /showIncludes /nologo /W3 /sdl /WX /EHsc /GR- /fp:fast /vms /Z7
+  description = compile $in > $out
+  deps = msvc
+
+rule link
+  command = link $in /OUT:$out /nologo /WX /MACHINE:X64 /SUBSYSTEM:CONSOLE /DEBUG /OPT:REF /OPT:ICF
+  description = link $in > $out
+
+build build\clex.obj: compile src\clex.c
+build build\dfa.obj: compile src\dfa.c
+build build\hash_set.obj: compile src\hash_set.c
+build build\hash_table.obj: compile src\hash_table.c
+build build\nfa.obj: compile src\nfa.c
+build build\stack_allocator.obj: compile src\stack_allocator.c
+build build\vector.obj: compile src\vector.c
+
+build bin\clex.exe: link $
+  build\clex.obj $
+  build\dfa.obj $
+  build\hash_set.obj $
+  build\hash_table.obj $
+  build\nfa.obj $
+  build\stack_allocator.obj $
+  build\vector.obj
