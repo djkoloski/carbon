@@ -12,7 +12,6 @@ struct DFAEntry
 	NFAExpression expression;
 	const char *symbol;
 };
-#define DFASTATE_EDGES_MAX 128
 struct DFAState
 {
 	const char *symbol;

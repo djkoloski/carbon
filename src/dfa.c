@@ -36,11 +36,11 @@ static void DFA_BuildEtaSet(NFAState *state, HashSet *set)
 	}
 	
 	HashSet_Insert(set, state);
-	if (state->left.state && state->left.symbol == 0)
+	if (state->left.state && NFAEdgeConditions_Get(&state->left.conditions, 0))
 	{
 		DFA_BuildEtaSet(state->left.state, set);
 	}
-	if (state->right.state && state->right.symbol == 0)
+	if (state->right.state && NFAEdgeConditions_Get(&state->right.conditions, 0))
 	{
 		DFA_BuildEtaSet(state->right.state, set);
 	}
@@ -150,39 +150,30 @@ static DFAState *DFA_FromEntriesRecurse(DFA *dfa, DFAEntry *entries, size_t entr
 				break;
 			}
 		}
-		
-		/* Clean up */
-		HashSet_Destroy(&closure);
-		
+
 		/* Collect transitions */
-		bool transitions[DFASTATE_EDGES_MAX];
-		memset(transitions, 0, DFASTATE_EDGES_MAX * sizeof(bool));
+		NFAEdgeConditions conditions;
+		memset(&conditions, 0, sizeof(NFAEdgeConditions));
 		for (size_t i = 0; i < key->size; ++i)
 		{
-			if (key->states[i]->left.symbol)
-			{
-				transitions[key->states[i]->left.symbol] = true;
-			}
-			if (key->states[i]->right.symbol)
-			{
-				transitions[key->states[i]->right.symbol] = true;
-			}
+			NFAEdgeConditions_Or(&conditions, &key->states[i]->left.conditions);
+			NFAEdgeConditions_Or(&conditions, &key->states[i]->right.conditions);
 		}
 		
 		/* Perform transitions */
 		for (int c = 1; c < DFASTATE_EDGES_MAX; ++c)
 		{
-			if (transitions[c])
+			if (NFAEdgeConditions_Get(&conditions, c))
 			{
 				/* Build edge */
 				Vector_Clear(edge);
 				for (size_t i = 0; i < key->size; ++i)
 				{
-					if (key->states[i]->left.symbol == c)
+					if (NFAEdgeConditions_Get(&key->states[i]->left.conditions, c))
 					{
 						Vector_Push(edge, key->states[i]->left.state);
 					}
-					if (key->states[i]->right.symbol == c)
+					if (NFAEdgeConditions_Get(&key->states[i]->right.conditions, c))
 					{
 						Vector_Push(edge, key->states[i]->right.state);
 					}
@@ -195,9 +186,13 @@ static DFAState *DFA_FromEntriesRecurse(DFA *dfa, DFAEntry *entries, size_t entr
 	}
 	else
 	{
-		/* Clean up */
-		HashSet_Destroy(&closure);
+		/* Release key */
+		StackAllocator_Free(allocator, key->size * sizeof(NFAState *));
+		StackAllocator_Free(allocator, sizeof(DFAStateKey));
 	}
+
+	/* Clean up */
+	HashSet_Destroy(&closure);
 	
 	return state;
 }

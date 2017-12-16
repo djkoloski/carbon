@@ -1,0 +1,13 @@
+rule compile
+  command = cl /c $in /Fo$out /showIncludes /nologo /W3 /sdl /WX /EHsc /GR- /fp:fast /vms /Z7
+  description = compile $in > $out
+  deps = msvc
+
+rule link
+  command = link $in /OUT:$out /nologo /WX /MACHINE:X64 /SUBSYSTEM:CONSOLE /DEBUG /OPT:REF /OPT:ICF
+  description = link $in > $out
+
+build main.obj: compile main.c
+build output.clex.obj: compile output.clex.c
+
+build main.exe: link main.obj output.clex.obj

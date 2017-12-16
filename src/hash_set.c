@@ -23,6 +23,7 @@ static void HashSet_Resize(HashSet *hashSet, size_t newCapacity)
 	StackAllocator_Create(&newAllocator, StackAllocator_DefaultGetNextCapacity);
 	
 	HashSetEntry **newEntries = StackAllocator_Allocate(&newAllocator, newCapacity * sizeof(HashSetEntry *));
+	memset(newEntries, 0, newCapacity * sizeof(HashSetEntry *));
 	for (size_t i = 0; i < hashSet->capacity; ++i)
 	{
 		HashSetEntry *entry = hashSet->entries[i];
@@ -32,6 +33,7 @@ static void HashSet_Resize(HashSet *hashSet, size_t newCapacity)
 			
 			HashSetEntry *newEntry = StackAllocator_Allocate(&newAllocator, sizeof(HashSetEntry));
 			newEntry->key = entry->key;
+			newEntry->next = NULL;
 			
 			HashSetEntry *head = newEntries[newIndex];
 			if (!head)
@@ -63,7 +65,7 @@ void HashSet_Insert(HashSet *hashSet, const void *key)
 	float currentLoadFactor = (float)hashSet->size / (float)hashSet->capacity;
 	if (currentLoadFactor > hashSet->loadFactor)
 	{
-		HashSet_Resize(hashSet, hashSet->size + hashSet->size / 2);
+		HashSet_Resize(hashSet, hashSet->capacity + hashSet->capacity / 2);
 	}
 	
 	HashSetEntry *newEntry = StackAllocator_Allocate(&hashSet->allocator, sizeof(HashSetEntry));

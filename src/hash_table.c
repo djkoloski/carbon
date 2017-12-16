@@ -23,6 +23,7 @@ static void HashTable_Resize(HashTable *hashTable, size_t newCapacity)
 	StackAllocator_Create(&newAllocator, StackAllocator_DefaultGetNextCapacity);
 	
 	HashTableEntry **newEntries = StackAllocator_Allocate(&newAllocator, newCapacity * sizeof(HashTableEntry *));
+	memset(newEntries, 0, newCapacity * sizeof(HashTableEntry *));
 	for (size_t i = 0; i < hashTable->capacity; ++i)
 	{
 		HashTableEntry *entry = hashTable->entries[i];
@@ -33,6 +34,7 @@ static void HashTable_Resize(HashTable *hashTable, size_t newCapacity)
 			HashTableEntry *newEntry = StackAllocator_Allocate(&newAllocator, sizeof(HashTableEntry));
 			newEntry->key = entry->key;
 			newEntry->value = entry->value;
+			newEntry->next = NULL;
 			
 			HashTableEntry *head = newEntries[newIndex];
 			if (!head)
