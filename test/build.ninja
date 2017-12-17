@@ -1,3 +1,7 @@
+rule clex
+  command = ..\bin\clex.exe $in -o $out
+  description = clex $in > $out
+
 rule compile
   command = cl /c $in /Fo$out /showIncludes /nologo /W3 /sdl /WX /EHsc /GR- /fp:fast /vms /Z7
   description = compile $in > $out
@@ -8,6 +12,7 @@ rule link
   description = link $in > $out
 
 build main.obj: compile main.c
-build output.clex.obj: compile output.clex.c
+build test.clex.h test.clex.c: clex test.clex
+build test.clex.obj: compile test.clex.c
 
-build main.exe: link main.obj output.clex.obj
+build main.exe: link main.obj test.clex.obj

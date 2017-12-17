@@ -37,6 +37,7 @@ void NFAEdgeConditions_Set(NFAEdgeConditions *condition, size_t index);
 void NFAEdgeConditions_Reset(NFAEdgeConditions *condition, size_t index);
 bool NFAEdgeConditions_Get(const NFAEdgeConditions *condition, size_t index);
 void NFAEdgeConditions_Or(NFAEdgeConditions *condition, const NFAEdgeConditions *other);
+void NFAEdgeConditions_Invert(NFAEdgeConditions *condition);
 
 void NFAState_Initialize(NFAState *state);
 

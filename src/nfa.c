@@ -30,6 +30,13 @@ void NFAEdgeConditions_Or(NFAEdgeConditions *conditions, const NFAEdgeConditions
 		conditions->bits[i] |= other->bits[i];
 	}
 }
+void NFAEdgeConditions_Invert(NFAEdgeConditions *conditions)
+{
+	for (size_t i = 0; i < DFASTATE_EDGES_MAX / 8; ++i)
+	{
+		conditions->bits[i] = ~conditions->bits[i];
+	}
+}
 
 void NFAState_Initialize(NFAState *state)
 {
@@ -77,7 +84,7 @@ static void NFA_BuildAndExpression(const NFAExpression *prev, const NFAExpressio
 	NFAEdgeConditions_Set(&prev->end->left.conditions, 0);
 	result->end = next->end;
 }
-static void NFA_BuildKleeneStarExpression(NFA *nfa, const NFAExpression *inner, NFAExpression *result)
+static void NFA_BuildStarExpression(NFA *nfa, const NFAExpression *inner, NFAExpression *result)
 {
 	result->start = NFA_AddState(nfa);
 	result->end = NFA_AddState(nfa);
@@ -92,23 +99,96 @@ static void NFA_BuildKleeneStarExpression(NFA *nfa, const NFAExpression *inner, 
 	inner->end->right.state = result->end;
 	NFAEdgeConditions_Set(&inner->end->right.conditions, 0);
 }
-void NFA_ParseRegexConditions(const char **regex, NFAEdgeConditions *conditions)
+static void NFA_BuildPlusExpression(NFA *nfa, const NFAExpression *inner, NFAExpression *result)
 {
+	result->start = NFA_AddState(nfa);
+	result->end = NFA_AddState(nfa);
+	
+	result->start->left.state = inner->start;
+	NFAEdgeConditions_Set(&result->start->left.conditions, 0);
+	
+	inner->end->left.state = inner->start;
+	NFAEdgeConditions_Set(&inner->end->left.conditions, 0);
+	inner->end->right.state = result->end;
+	NFAEdgeConditions_Set(&inner->end->right.conditions, 0);
+}
+static void NFA_BuildQuestionExpression(NFA *nfa, const NFAExpression *inner, NFAExpression *result)
+{
+	result->start = NFA_AddState(nfa);
+	result->end = NFA_AddState(nfa);
+	
+	result->start->left.state = inner->start;
+	NFAEdgeConditions_Set(&result->start->left.conditions, 0);
+	result->start->right.state = inner->end;
+	NFAEdgeConditions_Set(&result->start->right.conditions, 0);
+	
+	inner->end->right.state = result->end;
+	NFAEdgeConditions_Set(&inner->end->right.conditions, 0);
+}
+static bool NFA_ParseRegexCharacter(const char **regex, char *value)
+{
+	*value = **regex;
+	++*regex;
+
+	if (*value == '\\')
+	{
+		*value = **regex;
+		++*regex;
+		switch (*value)
+		{
+			case 't':
+				*value = '\t';
+				break;
+			case 'r':
+				*value = '\r';
+				break;
+			case 'n':
+				*value = '\n';
+				break;
+			default:
+				break;
+		}
+		return true;
+	}
+
+	return false;
+}
+static void NFA_ParseRegexConditions(const char **regex, NFAEdgeConditions *conditions)
+{
+	bool invert = false;
+	if (**regex == '^')
+	{
+		invert = true;
+		++*regex;
+	}
+	
 	while (**regex && **regex != ']')
 	{
-		char from = **regex;
-		++*regex;
-		assert(**regex == '-');
-		++*regex;
-		char to = **regex;
-		++*regex;
+		char from = 0;
+		bool escapeFrom = NFA_ParseRegexCharacter(regex, &from);
 		
-		for (int i = from; i <= to; ++i)
+		if (**regex == '-')
 		{
-			NFAEdgeConditions_Set(conditions, i);
+			++*regex;
+			char to = 0;
+			bool escapeTo = NFA_ParseRegexCharacter(regex, &to);
+			
+			for (int i = from; i <= to; ++i)
+			{
+				NFAEdgeConditions_Set(conditions, i);
+			}
+		}
+		else
+		{
+			NFAEdgeConditions_Set(conditions, from);
 		}
 	}
 	++*regex;
+	
+	if (invert)
+	{
+		NFAEdgeConditions_Invert(conditions);
+	}
 }
 void NFA_ParseRegexBase(NFA *nfa, const char **regex, NFAExpression *expr)
 {
@@ -127,26 +207,58 @@ void NFA_ParseRegexBase(NFA *nfa, const char **regex, NFAExpression *expr)
 			NFA_ParseRegexConditions(regex, &expr->start->left.conditions);
 			expr->start->left.state = expr->end;
 			break;
-		case '\\':
-			++*regex;
 		default:
+			char value = 0;
+			bool escaped = NFA_ParseRegexCharacter(regex, &value);
+			
 			expr->start = NFA_AddState(nfa);
 			expr->end = NFA_AddState(nfa);
-			NFAEdgeConditions_Set(&expr->start->left.conditions, **regex);
+			
+			if (!escaped && value == '.')
+			{
+				NFAEdgeConditions_Invert(&expr->start->left.conditions);
+				NFAEdgeConditions_Reset(&expr->start->left.conditions, '\r');
+				NFAEdgeConditions_Reset(&expr->start->left.conditions, '\n');
+			}
+			else
+			{
+				NFAEdgeConditions_Set(&expr->start->left.conditions, value);
+			}
 			expr->start->left.state = expr->end;
-			++*regex;
 			break;
 	}
 }
 void NFA_ParseRegexFactor(NFA *nfa, const char **regex, NFAExpression *expr)
 {
 	NFA_ParseRegexBase(nfa, regex, expr);
-	if (**regex == '*')
+	switch (**regex)
 	{
-		++*regex;
-		NFAExpression inner = *expr;
-		
-		NFA_BuildKleeneStarExpression(nfa, &inner, expr);
+		case '*':
+		{
+			++*regex;
+			NFAExpression inner = *expr;
+			
+			NFA_BuildStarExpression(nfa, &inner, expr);
+			break;
+		}
+		case '+':
+		{
+			++*regex;
+			NFAExpression inner = *expr;
+			
+			NFA_BuildPlusExpression(nfa, &inner, expr);
+			break;
+		}
+		case '?':
+		{
+			++*regex;
+			NFAExpression inner = *expr;
+			
+			NFA_BuildQuestionExpression(nfa, &inner, expr);
+			break;
+		}
+		default:
+			break;
 	}
 }
 void NFA_ParseRegexTerm(NFA *nfa, const char **regex, NFAExpression *expr)
